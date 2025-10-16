@@ -32,6 +32,8 @@ from datetime import datetime, timedelta
 import re
 import time
 import pytz
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 
 
@@ -277,19 +279,22 @@ async def main():
     app.add_handler(CommandHandler("listsubs", listsubs_cmd))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 
-    # Scheduler
-    scheduler = AsyncIOScheduler(timezone=SCHEDULER_TZ)
-    # send 5 minutes from now
-    run_time = datetime.now() + timedelta(minutes=2)
-    trigger = DateTrigger(run_date=run_time)
+    # Scheduler setup
+    tz = pytz.timezone("Asia/Singapore")
+    scheduler = AsyncIOScheduler(timezone=tz)
+    cron_trigger = CronTrigger(
+        day_of_week="sun,thu",
+        hour=NOTIFY_HOUR,
+        minute=NOTIFY_MINUTE,
+        timezone=tz
+    )
+    scheduler.add_job(partial(send_toto_update, context=app), cron_trigger)
+    print(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
-    cron = CronTrigger(day_of_week="sun,thu", hour=NOTIFY_HOUR, minute=NOTIFY_MINUTE)
-    scheduler.add_job(partial(send_toto_update, context=app), cron)
-    print(f"Test notification scheduled at {run_time}")
+    # Start scheduler
     scheduler.start()
 
-    print(f"Bot started. Notifications scheduled Sun & Wed at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
-
+    # Start Telegram bot polling
     await app.run_polling(close_loop=False)
 
 # -------------------------
