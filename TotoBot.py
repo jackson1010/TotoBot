@@ -9,7 +9,6 @@ TELEGRAM_TOKEN=123456789:ABCDefGhIjKlmNoPQrsTUvWXyZ
 ADMIN_USERNAME=YourTelegramUsernameWithout@
 TOTO_DB_PATH=toto_subscribers.db
 """
-
 import os
 import sqlite3
 import logging
@@ -17,14 +16,11 @@ import asyncio
 from functools import partial
 from datetime import datetime, timedelta
 import time
-import re
-
 import pytz
 from dotenv import load_dotenv
 import nest_asyncio
-
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.cron import CronTrigger
 
 from telegram import Update
@@ -33,6 +29,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # -------------------------
 # Load env
@@ -270,6 +268,7 @@ async def main():
     cron_trigger = CronTrigger(day_of_week="sun,thu", hour=NOTIFY_HOUR, minute=NOTIFY_MINUTE, timezone=SCHEDULER_TZ)
     scheduler.add_job(partial(send_toto_update, context=app), cron_trigger)
     print(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} SGT")
+    logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
     scheduler.start()
     await app.run_polling(close_loop=False)

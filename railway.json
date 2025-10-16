@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK"
+  },
+  "deploy": {
+    "runtime": "python-3.11",
+    "numReplicas": 1,
+    "startCommand": "python TotoBot.py",
+    "sleepApplication": false,
+    "useLegacyStacker": false,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
