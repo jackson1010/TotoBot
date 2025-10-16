@@ -4,7 +4,7 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "runtime": "python-3.11",
+    "runtime": "V2",
     "numReplicas": 1,
     "startCommand": "python TotoBot.py",
     "sleepApplication": false,
