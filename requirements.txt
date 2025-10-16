@@ -1,7 +1,9 @@
 python-telegram-bot==20.7
 requests
 beautifulsoup4
-apscheduler
-nest_asyncio
-selenium
-python-dotenv
+apscheduler~=3.6.3
+nest_asyncio~=1.5.6
+selenium~=4.33.0
+python-dotenv~=0.21.0
+
+pytz~=2023.3.post1

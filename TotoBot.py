@@ -31,6 +31,9 @@ from selenium.webdriver.common.by import By
 from datetime import datetime, timedelta
 import re
 import time
+import pytz
+
+
 
 # -------------------------
 # Load env
@@ -43,7 +46,7 @@ SCRAPING_ENABLED = True
 USER_AGENT = "TotoNotifierBot/1.0 (+https://example.com)"
 
 # Scheduler timezone: Asia/Singapore (UTC+8)
-SCHEDULER_TZ = "Asia/Singapore"
+SCHEDULER_TZ = pytz.timezone("Asia/Singapore")
 NOTIFY_HOUR = 10
 NOTIFY_MINUTE = 0
 SCRAPE_DELAY_SECONDS = 1.5
