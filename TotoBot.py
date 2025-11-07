@@ -43,6 +43,9 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 DATABASE = os.getenv("TOTO_DB_PATH")
 SCRAPING_ENABLED = True
 USER_AGENT = "TotoNotifierBot/1.0 (+https://example.com)"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://my-app.up.railway.app
+PORT = int(os.getenv("PORT", 8000))
+WEBHOOK_PATH = "telegram-webhook"
 
 # Scheduler timezone
 SCHEDULER_TZ = pytz.timezone("Asia/Singapore")
@@ -254,11 +257,6 @@ async def send_toto_update(context: ContextTypes.DEFAULT_TYPE):
 # Main
 # -------------------------
 
-load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://my-app.up.railway.app
-PORT = int(os.getenv("PORT", 8000))
-WEBHOOK_PATH = "telegram-webhook"
 
 async def main():
     init_db()
