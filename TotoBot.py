@@ -39,7 +39,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 DATABASE = os.getenv("TOTO_DB_PATH")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-PORT = int(os.getenv("PORT", 8000))
+PORT = int(os.getenv("PORT", 8443))
 WEBHOOK_PATH = "telegram-webhook"
 
 # Scheduler timezone
