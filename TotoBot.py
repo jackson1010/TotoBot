@@ -233,9 +233,9 @@ async def main():
     await app.start_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path=TELEGRAM_TOKEN
+        url_path="telegram-webhook"
     )
-    await app.bot.set_webhook(f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    await app.bot.set_webhook(f"{WEBHOOK_URL}/telegram-webhook")
 
     print(f"Webhook running at {WEBHOOK_URL}/{TELEGRAM_TOKEN}")
     await app.updater.idle()
