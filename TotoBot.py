@@ -282,7 +282,7 @@ async def main():
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=f"/{WEBHOOK_PATH}",
+        webhook_path=WEBHOOK_PATH,  # <- just the path string
         webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}"
     )
 
