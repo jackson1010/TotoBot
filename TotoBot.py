@@ -13,6 +13,8 @@ import os
 import sqlite3
 import logging
 import asyncio
+from telegram.ext import ApplicationBuilder, CommandHandler
+from dotenv import load_dotenv
 from functools import partial
 from datetime import datetime, timedelta
 import time
@@ -251,6 +253,13 @@ async def send_toto_update(context: ContextTypes.DEFAULT_TYPE):
 # -------------------------
 # Main
 # -------------------------
+
+load_dotenv()
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://my-app.up.railway.app
+PORT = int(os.getenv("PORT", 8000))
+WEBHOOK_PATH = "telegram-webhook"
+
 async def main():
     init_db()
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -271,21 +280,17 @@ async def main():
     logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
     scheduler.start()
-    webhook_url = os.getenv("WEBHOOK_URL")  # e.g., "https://my-app.up.railway.app"
-    port = int(os.getenv("PORT", 8000))
-
-    # Listen on path /telegram-webhook
-    url_path = "telegram-webhook"
-    await app.start_webhook(
+    # Run webhook
+    await app.run_webhook(
         listen="0.0.0.0",
-        port=port,
-        url_path=url_path
+        port=PORT,
+        webhook_path=f"/{WEBHOOK_PATH}",
+        webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}"
     )
 
-    await app.bot.set_webhook(f"{webhook_url}/{url_path}")
-    print(f"Webhook running at {webhook_url}/telegram-webhook")
 
-    await app.updater.idle()
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 # -------------------------
