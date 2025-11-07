@@ -1,4 +1,4 @@
-# TotoBotRailway.py
+# TotoBotRailwaySafe.py
 
 import os
 import sqlite3
@@ -20,27 +20,24 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 # -------------------------
-# Load env
+# Load environment
 # -------------------------
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 DATABASE = os.getenv("TOTO_DB_PATH", "toto_subscribers.db")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Railway URL e.g., https://totobot-production.up.railway.app
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Railway URL
 PORT = int(os.getenv("PORT", 8000))
 WEBHOOK_PATH = "telegram-webhook"
 
-SCRAPING_ENABLED = True
 USER_AGENT = "TotoNotifierBot/1.0 (+https://example.com)"
-
 SCHEDULER_TZ = pytz.timezone("Asia/Singapore")
 NOTIFY_HOUR = 10
 NOTIFY_MINUTE = 0
 
-# Logging
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-    level=logging.INFO,
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -116,24 +113,17 @@ def fetch_toto_info_selenium():
     driver = webdriver.Chrome(options=options)
     try:
         driver.get("https://www.singaporepools.com.sg/en/product/pages/toto_results.aspx")
-        time.sleep(3)
-
+        time.sleep(2)
         jackpot_elem = driver.find_element(By.XPATH, "//div[text()[contains(.,'Next Jackpot')]]/following-sibling::span")
         draw_elem = driver.find_element(By.XPATH, "//div[text()[contains(.,'Next Draw')]]/following-sibling::div[@class='toto-draw-date']")
-
         jackpot = jackpot_elem.text.strip() if jackpot_elem else None
         next_draw = draw_elem.text.strip() if draw_elem else None
         return jackpot, next_draw
     except Exception as e:
-        print(f"Error fetching TOTO info: {e}")
+        print(f"Selenium fetch error: {e}")
         return None, None
     finally:
         driver.quit()
-
-def fetch_toto_info():
-    if not SCRAPING_ENABLED:
-        return None, None
-    return fetch_toto_info_selenium()
 
 def is_past_draw(next_draw_str: str) -> bool:
     try:
@@ -150,16 +140,15 @@ def get_data():
     if record:
         next_draw, jackpot = record
     if not jackpot or not next_draw or is_past_draw(next_draw):
-        jackpot, next_draw = fetch_toto_info()
+        jackpot, next_draw = fetch_toto_info_selenium()
         if jackpot and next_draw:
             store_next_draw(next_draw, jackpot)
     return jackpot, next_draw
 
 # -------------------------
-# Telegram handlers
+# Telegram Handlers
 # -------------------------
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Received /start from {update.effective_chat.id}")
     add_subscriber(update.effective_chat.id)
     await update.message.reply_text("✅ Subscribed to TOTO prize updates!")
 
@@ -177,16 +166,14 @@ def _is_admin(update: Update):
     return uname and uname.lower() == ADMIN_USERNAME.lower()
 
 async def listsubs_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not _is_admin(update):
-        return await update.message.reply_text("Unauthorized.")
+    if not _is_admin(update): return await update.message.reply_text("Unauthorized.")
     subs = list_subscribers()
     await update.message.reply_text(f"Subscribers ({len(subs)}):\n" + "\n".join(str(s) for s in subs[:200]))
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not _is_admin(update):
-        return await update.message.reply_text("Unauthorized.")
+    if not _is_admin(update): return await update.message.reply_text("Unauthorized.")
     jackpot, next_draw = get_data()
-    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}\n"
+    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}"
     for cid in list_subscribers():
         try:
             await context.bot.send_message(chat_id=cid, text=message, parse_mode="HTML")
@@ -194,10 +181,10 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     await update.message.reply_text(f"Broadcast sent to {len(list_subscribers())} subscribers.")
 
-# Scheduled notifications
+# Scheduled notification
 async def send_toto_update(context: ContextTypes.DEFAULT_TYPE):
     jackpot, next_draw = get_data()
-    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}\n"
+    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}"
     for cid in list_subscribers():
         try:
             await context.bot.send_message(chat_id=cid, text=message, parse_mode="HTML")
@@ -211,29 +198,33 @@ async def main():
     init_db()
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Command handlers
+    # Handlers
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("unsubscribe", unsubscribe_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("listsubs", listsubs_cmd))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 
-    # Scheduler
-    scheduler = AsyncIOScheduler(timezone=SCHEDULER_TZ)
-    cron_trigger = CronTrigger(day_of_week="sun,thu", hour=NOTIFY_HOUR, minute=NOTIFY_MINUTE, timezone=SCHEDULER_TZ)
-    scheduler.add_job(partial(send_toto_update, context=app), cron_trigger)
-    scheduler.start()
-
-    print(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} SGT")
-    print(f"Webhook running at {WEBHOOK_URL}/{WEBHOOK_PATH}")
-
-    # Run webhook (Railway-ready)
-    await app.run_webhook(
+    # Start webhook first
+    await app.start_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=WEBHOOK_PATH,  # no leading slash
-        webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}"
+        webhook_path=WEBHOOK_PATH
     )
+
+    # Register webhook with Telegram
+    await app.bot.set_webhook(f"{WEBHOOK_URL}/{WEBHOOK_PATH}")
+    print(f"✅ Webhook ready at {WEBHOOK_URL}/{WEBHOOK_PATH}")
+
+    # Scheduler starts after webhook is ready
+    scheduler = AsyncIOScheduler(timezone=SCHEDULER_TZ)
+    cron_trigger = CronTrigger(day_of_week="sun,thu", hour=NOTIFY_HOUR, minute=NOTIFY_MINUTE)
+    scheduler.add_job(partial(send_toto_update, context=app), cron_trigger)
+    scheduler.start()
+    print(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} SGT")
+
+    # Keep bot running
+    await app.updater.idle()
 
 if __name__ == "__main__":
     asyncio.run(main())
