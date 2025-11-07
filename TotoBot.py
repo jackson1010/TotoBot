@@ -275,14 +275,14 @@ async def main():
     port = int(os.getenv("PORT", 8000))
 
     # Listen on path /telegram-webhook
+    url_path = "telegram-webhook"
     await app.start_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path="telegram-webhook"
+        url_path=url_path
     )
 
-    # Tell Telegram to send updates to your webhook
-    await app.bot.set_webhook(f"{webhook_url}/telegram-webhook")
+    await app.bot.set_webhook(f"{webhook_url}/{url_path}")
     print(f"Webhook running at {webhook_url}/telegram-webhook")
 
     await app.updater.idle()
