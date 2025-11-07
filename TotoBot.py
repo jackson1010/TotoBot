@@ -215,19 +215,19 @@ async def main():
     scheduler.start()
     logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} SGT")
 
-    # Start background scraper
-    asyncio.create_task(background_scraper())
+    # Start background scraper if needed
+    # asyncio.create_task(background_scraper())  # optional
 
-    # Start webhook
-    await app.start_webhook(
+    # Start webhook — this **replaces set_webhook and updater.idle**
+    await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=WEBHOOK_PATH
+        webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}"
     )
-    await app.bot.set_webhook(f"{WEBHOOK_URL}/{WEBHOOK_PATH}")
     logger.info(f"Webhook running at {WEBHOOK_URL}/{WEBHOOK_PATH}")
 
-    await app.updater.idle()
 
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main())
+
