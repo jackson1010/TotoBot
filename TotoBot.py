@@ -271,16 +271,16 @@ async def main():
     logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
     scheduler.start()
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-    PORT = int(os.getenv("PORT", 8000))
+    webhook_url = os.getenv("WEBHOOK_URL")
+    port = int(os.getenv("port", 8000))
     await app.start_webhook(
         listen="0.0.0.0",
-        port=PORT,
+        port=port,
         url_path=TELEGRAM_TOKEN
     )
 
-    await app.bot.set_webhook(f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
-    print (f"Webhook running at {WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    await app.bot.set_webhook(f"{webhook_url}/{TELEGRAM_TOKEN}")
+    print (f"Webhook running at {webhook_url}/{TELEGRAM_TOKEN}")
     await app.updater.idle()
 
 
