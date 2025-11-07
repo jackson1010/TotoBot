@@ -239,3 +239,8 @@ async def main():
 
     print(f"Webhook running at {WEBHOOK_URL}/{TELEGRAM_TOKEN}")
     await app.updater.idle()
+
+    if __name__ == "__main__":
+        import nest_asyncio
+        nest_asyncio.apply()
+        asyncio.run(main())
