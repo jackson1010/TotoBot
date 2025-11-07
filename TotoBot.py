@@ -271,16 +271,20 @@ async def main():
     logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
     scheduler.start()
-    webhook_url = os.getenv("WEBHOOK_URL")
+    webhook_url = os.getenv("WEBHOOK_URL")  # e.g., "https://my-app.up.railway.app"
     port = int(os.getenv("PORT", 8000))
+
+    # Listen on path /telegram-webhook
     await app.start_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path=TELEGRAM_TOKEN
+        url_path="telegram-webhook"
     )
 
-    await app.bot.set_webhook(f"{webhook_url}/{TELEGRAM_TOKEN}")
-    print (f"Webhook running at {webhook_url}/{TELEGRAM_TOKEN}")
+    # Tell Telegram to send updates to your webhook
+    await app.bot.set_webhook(f"{webhook_url}/telegram-webhook")
+    print(f"Webhook running at {webhook_url}/telegram-webhook")
+
     await app.updater.idle()
 
 
