@@ -119,7 +119,7 @@ def store_next_draw(next_draw: str, jackpot: str):
 def get_next_draw():
     conn = sqlite3.connect(DATABASE)
     cur = conn.cursor()
-    cur.execute("SELECT next_draw, jackpot FROM nextDraw ORDER BY next_draw DESC LIMIT 1")
+    cur.execute("SELECT next_draw, jackpot FROM nextDraw ORDER BY rowid DESC LIMIT 1")
     row = cur.fetchone()
     conn.close()
     return row  # (next_draw, jackpot) or None
@@ -271,13 +271,23 @@ async def main():
     logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} (SGT)")
 
     scheduler.start()
-    await app.run_polling(close_loop=False)
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    PORT = int(os.getenv("PORT", 8000))
+    await app.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TELEGRAM_TOKEN
+    )
+
+    await app.bot.set_webhook(f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    print (f"Webhook running at {WEBHOOK_URL}/{TELEGRAM_TOKEN}")
+    await app.updater.idle()
 
 
 # -------------------------
 # Run done
 # -------------------------
-nest_asyncio.apply()
-loop = asyncio.get_event_loop()
-loop.create_task(main())
-loop.run_forever()
+# nest_asyncio.apply()
+# loop = asyncio.get_event_loop()
+# loop.create_task(main())
+# loop.run_forever()
