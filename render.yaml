@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: toto-bot
+    env: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python TotoBot.py
+    autoDeploy: true
+    plan: free
+    envVars:
+      - key: TELEGRAM_TOKEN
+        fromDatabase: false
+        value: "your-telegram-bot-token"
+      - key: ADMIN_USERNAME
+        fromDatabase: false
+        value: "your-telegram-username"
+      - key: TOTO_DB_PATH
+        fromDatabase: false
+        value: "toto.db"
+      - key: WEBHOOK_URL
+        fromDatabase: false
+        value: "https://your-service-name.onrender.com"
+      - key: PORT
+        fromDatabase: false
+        value: "10000"
