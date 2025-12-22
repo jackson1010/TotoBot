@@ -8,7 +8,6 @@ from pytz import timezone
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from telegram import Update
 from telegram.ext import (
     Application,
