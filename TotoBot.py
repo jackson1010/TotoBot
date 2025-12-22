@@ -1,246 +1,230 @@
-"""
-TotoBot.py using Playwright
-
-Requirements:
-pip install python-telegram-bot==20.7 apscheduler requests beautifulsoup4 python-dotenv playwright pytz nest_asyncio
-
-Run once:
-playwright install
-
-.env file should have:
-TELEGRAM_TOKEN=123456789:ABCDefGhIjKlmNoPQrsTUvWXyZ
-ADMIN_USERNAME=YourTelegramUsernameWithout@
-TOTO_DB_PATH=toto_subscribers.db
-WEBHOOK_URL=https://your-app.up.railway.app
-PORT=8000
-"""
-
+import asyncio
+from datetime import datetime
 import os
 import sqlite3
 import logging
-import asyncio
-from functools import partial
-from datetime import datetime
 import pytz
+from pytz import timezone
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+)
+
+Memory ={
+    "jackpot": None,
+    "draw": None,
+}
 
 from playwright.async_api import async_playwright
 
 # -------------------------
-# Load env
+# ENV
 # -------------------------
 load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
-DATABASE = os.getenv("TOTO_DB_PATH")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-PORT = int(os.getenv("PORT", 8443))
-WEBHOOK_PATH = "telegram-webhook"
 
-# Scheduler timezone
-SCHEDULER_TZ = pytz.timezone("Asia/Singapore")
-NOTIFY_HOUR = 10
-NOTIFY_MINUTE = 0
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
+DATABASE = os.getenv("TOTO_DB_PATH", "toto.db")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.getenv("PORT", 10000))
+WEBHOOK_PATH = "telegram"
 
 # -------------------------
 # Logging
 # -------------------------
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-    level=logging.INFO,
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # -------------------------
-# SQLite DB functions
+# DB
 # -------------------------
 def init_db():
     conn = sqlite3.connect(DATABASE)
     cur = conn.cursor()
+
+    # Create subscribers table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS subscribers (
-            chat_id INTEGER PRIMARY KEY,
-            added_at TEXT
-        );
+            chat_id INTEGER PRIMARY KEY
+        )
     """)
+    # Create result table
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS nextDraw (
-            next_draw TEXT PRIMARY KEY,
-            jackpot TEXT
-        );
+        CREATE TABLE IF NOT EXISTS result (
+            jackpot INTEGER,
+            draw TEXT
+        )
     """)
+
     conn.commit()
     conn.close()
 
 
-def add_subscriber(chat_id: int):
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO subscribers (chat_id, added_at) VALUES (?, datetime('now'))", (chat_id,))
-    conn.commit()
-    conn.close()
+def add_subscriber(cid):
+    with sqlite3.connect(DATABASE) as c:
+        c.execute("INSERT OR IGNORE INTO subscribers VALUES (?)", (cid,))
 
+def remove_subscriber(cid):
+    with sqlite3.connect(DATABASE) as c:
+        c.execute("DELETE FROM subscribers WHERE chat_id=?", (cid,))
 
-def remove_subscriber(chat_id: int):
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM subscribers WHERE chat_id = ?", (chat_id,))
-    conn.commit()
-    conn.close()
+def list_subscribers():
+    with sqlite3.connect(DATABASE) as c:
+        return [r[0] for r in c.execute("SELECT chat_id FROM subscribers")]
 
+def store_result(jackpot, draw):
+    with sqlite3.connect(DATABASE) as c:
+        c.execute("DELETE FROM result")
+        c.execute("INSERT INTO result (jackpot, draw) VALUES (?, ?)", (jackpot, draw))
 
-def list_subscribers() -> list:
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute("SELECT chat_id FROM subscribers")
-    rows = cur.fetchall()
-    conn.close()
-    return [r[0] for r in rows]
-
-
-def store_next_draw(next_draw: str, jackpot: str):
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT OR REPLACE INTO nextDraw (next_draw, jackpot)
-        VALUES (?, ?)
-    """, (next_draw, jackpot))
-    conn.commit()
-    conn.close()
-
-
-def get_next_draw():
-    conn = sqlite3.connect(DATABASE)
-    cur = conn.cursor()
-    cur.execute("SELECT next_draw, jackpot FROM nextDraw ORDER BY rowid DESC LIMIT 1")
-    row = cur.fetchone()
-    conn.close()
-    return row
+def get_latest_result():
+    with sqlite3.connect(DATABASE) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT jackpot, draw
+            FROM result
+            ORDER BY rowid DESC
+            LIMIT 1
+        """)
+        return cur.fetchone()
 
 # -------------------------
-# Playwright scraper
+# Playwright
 # -------------------------
-async def fetch_toto_info_playwright():
+def cache_result(jackpot, draw):
+    Memory["jackpot"] = jackpot
+    Memory["draw"] = draw
+
+async def fetch_toto():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto("https://www.singaporepools.com.sg/en/product/pages/toto_results.aspx")
+        await page.wait_for_selector("div.toto-draw-date", timeout=10000)
+        jackpot = await page.locator("text=Next Jackpot").locator("xpath=following-sibling::span").inner_text()
+        draw = await page.locator("text=Next Draw").locator("xpath=following-sibling::div").inner_text()
+
+        await browser.close()
+        return jackpot.strip(), draw.strip()
+
+def is_draw_past(draw_str: str) -> bool:
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            await page.goto("https://www.singaporepools.com.sg/en/product/pages/toto_results.aspx")
-            await page.wait_for_selector("div.toto-draw-date", timeout=5000)
-
-            jackpot_elem = await page.query_selector("//div[text()[contains(.,'Next Jackpot')]]/following-sibling::span")
-            next_draw_elem = await page.query_selector("//div[text()[contains(.,'Next Draw')]]/following-sibling::div[@class='toto-draw-date']")
-
-            jackpot = await jackpot_elem.inner_text() if jackpot_elem else None
-            next_draw = await next_draw_elem.inner_text() if next_draw_elem else None
-
-            await browser.close()
-            return jackpot.strip() if jackpot else None, next_draw.strip() if next_draw else None
+        # Replace periods if needed and normalize spacing
+        draw_str = draw_str.replace(" ,", ",").strip()
+        draw_str = draw_str.replace('.', ':')
+        clean = draw_str[:-2] + draw_str[-2:].upper()
+        dt = datetime.strptime(clean, "%a, %d %b %Y, %I:%M%p")
+        return dt < datetime.now()
     except Exception as e:
-        print(f"Error fetching TOTO info via Playwright: {e}")
-        return None, None
+        print("Could not parse draw date:", e)
+        return True  # if parsing fails, assume we need to fetch new data
+
+async def get_toto_data(fetch_func):
+    jackpot, draw = Memory.get("jackpot"), Memory.get("draw")
+    if jackpot is not None and draw is not None:
+        if not is_draw_past(draw):
+            logger.info("Jackpot from cache")
+            return jackpot, draw
+
+    #from DB
+    result = get_latest_result()
+    if result:
+        jackpot, draw = result
+        if jackpot is not None and draw is not None:
+            if not is_draw_past(draw):
+                logger.info("Jackpot from DB")
+                cache_result(jackpot, draw)
+                return jackpot, draw
+
+    #from website
+    jackpot, draw = await fetch_func()
+    logger.info("Jackpot from website")
+    if jackpot is not None and draw is not None:
+            cache_result(jackpot, draw)
+            store_result(jackpot, draw)
+    return jackpot, draw
 
 
-async def get_data():
-    record = get_next_draw()
-    jackpot, next_draw = (None, None)
-    if record:
-        next_draw, jackpot = record
-
-    # Fetch fresh data if needed
-    if not jackpot or not next_draw:
-        jackpot, next_draw = await fetch_toto_info_playwright()
-        if jackpot and next_draw:
-            store_next_draw(next_draw, jackpot)
-    return jackpot, next_draw
 
 # -------------------------
-# Telegram handlers
+# Handlers
 # -------------------------
-async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, _: ContextTypes.DEFAULT_TYPE):
     add_subscriber(update.effective_chat.id)
-    await update.message.reply_text("✅ Subscribed to TOTO prize updates!")
+    await update.message.reply_text("✅ Subscribed to TOTO updates")
 
-async def unsubscribe_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def unsubscribe(update: Update, _: ContextTypes.DEFAULT_TYPE):
     remove_subscriber(update.effective_chat.id)
-    await update.message.reply_text("✅ You have been unsubscribed.")
+    await update.message.reply_text("❌ Unsubscribed")
 
-async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    jackpot, next_draw = await get_data()
-    text = f"🏆 Prize: {jackpot or 'N/A'}\n📅 Next Draw: {next_draw or 'N/A'}"
-    await update.message.reply_text(text)
-
-def _is_admin(update: Update):
-    uname = update.effective_user.username
-    return uname and uname.lower() == ADMIN_USERNAME.lower()
-
-async def listsubs_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not _is_admin(update):
-        return await update.message.reply_text("Unauthorized.")
-    subs = list_subscribers()
-    await update.message.reply_text(f"Subscribers ({len(subs)}):\n" + "\n".join(str(s) for s in subs[:200]))
-
-async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not _is_admin(update):
-        return await update.message.reply_text("Unauthorized.")
-    jackpot, next_draw = await get_data()
-    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}\n"
-    for cid in list_subscribers():
-        try:
-            await context.bot.send_message(chat_id=cid, text=message, parse_mode="HTML")
-        except: pass
-    await update.message.reply_text(f"Broadcast sent to {len(list_subscribers())} subscribers.")
+async def status(update: Update, _: ContextTypes.DEFAULT_TYPE):
+    jackpot, draw = await get_toto_data(fetch_toto)
+    await update.message.reply_text(f"🏆 {jackpot}\n📅 {draw}")
 
 # -------------------------
-# Scheduler
+# Scheduler job
 # -------------------------
-async def send_toto_update(context: ContextTypes.DEFAULT_TYPE):
-    jackpot, next_draw = await get_data()
-    message = f"🏆 <b>TOTO Update</b>\n💰 Prize: {jackpot or '(not available)'}\n📅 Next Draw: {next_draw or '(not available)'}\n"
+async def send_update(app: Application):
+    jackpot, draw = await get_toto_data(fetch_toto)
+    msg = f"🏆 <b>TOTO Update</b>\n💰 {jackpot}\n📅 {draw}"
+
     for cid in list_subscribers():
         try:
-            await context.bot.send_message(chat_id=cid, text=message, parse_mode="HTML")
+            await app.bot.send_message(cid, msg, parse_mode="HTML")
         except Exception as e:
-            print(f"Failed to send message to {cid}: {e}")
+            logger.warning(f"Failed to send to {cid}: {e}")
+
+# -------------------------
+# Post-init hook
+# -------------------------
+async def post_init(app: Application):
+    scheduler = AsyncIOScheduler(timezone=timezone("Asia/Singapore"))
+    trigger = CronTrigger(day_of_week="mon,thu", hour=11, minute=0)
+#for render
+    scheduler.add_job(send_update, trigger, args=[app])
+# for local
+#    loop = asyncio.get_event_loop()
+#   scheduler.add_job(
+#        lambda: asyncio.run_coroutine_threadsafe(send_update(app), loop),
+#        trigger
+#    )
+    scheduler.start()
+    for job in scheduler.get_jobs():
+        logger.info(f"Next run: {job.next_run_time}")
+    logger.info("Scheduler started")
 
 # -------------------------
 # Main
 # -------------------------
-async def main():
+def main():
     init_db()
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Handlers
-    app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("unsubscribe", unsubscribe_cmd))
-    app.add_handler(CommandHandler("status", status_cmd))
-    app.add_handler(CommandHandler("listsubs", listsubs_cmd))
-    app.add_handler(CommandHandler("broadcast", broadcast_cmd))
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
-    # Scheduler
-    scheduler = AsyncIOScheduler(timezone=SCHEDULER_TZ)
-    cron_trigger = CronTrigger(day_of_week="sun,thu", hour=NOTIFY_HOUR, minute=NOTIFY_MINUTE)
-    scheduler.add_job(partial(send_toto_update, context=app), cron_trigger)
-    scheduler.start()
-    logger.info(f"Cron notifications scheduled Sun & Thu at {NOTIFY_HOUR:02d}:{NOTIFY_MINUTE:02d} SGT")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("unsubscribe", unsubscribe))
+    app.add_handler(CommandHandler("status", status))
+    # for local
+    # app.run_polling()
 
-    # Run webhook
-    await app.start_webhook(
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="telegram-webhook"
+        url_path=WEBHOOK_PATH,
+        webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}",
     )
-    await app.bot.set_webhook(f"{WEBHOOK_URL}/telegram-webhook")
 
-    print(f"Webhook running at {WEBHOOK_URL}/{TELEGRAM_TOKEN}")
-    await app.updater.idle()
-
-    if __name__ == "__main__":
-        import nest_asyncio
-        nest_asyncio.apply()
-        asyncio.run(main())
+if __name__ == "__main__":
+    main()
