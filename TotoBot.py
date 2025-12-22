@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import datetime
 import os
 import sqlite3
@@ -9,6 +10,8 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import *
+from telegram import Bot, BotCommand
+
 
 
 Memory ={
@@ -96,6 +99,16 @@ def cache_result(jackpot, draw):
     Memory["jackpot"] = jackpot
     Memory["draw"] = draw
 
+async def set_bot_commands(app):
+    commands = [
+        BotCommand("start", "Subscribe to TOTO updates"),
+        BotCommand("unsubscribe", "Unsubscribe from TOTO updates"),
+        BotCommand("nextdraw", "Show next draw date"),
+        BotCommand("quickpick", "Generate random TOTO numbers"),
+        # add more commands here
+    ]
+    await app.bot.set_my_commands(commands)
+
 async def fetch_toto():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -145,6 +158,9 @@ async def get_toto_data(fetch_func):
             store_result(jackpot, draw)
     return jackpot, draw
 
+def get_lucky_number():
+    numbers = random.sample(range(1, 50), 7)
+    return numbers
 
 
 # -------------------------
@@ -162,6 +178,13 @@ async def status(update, context):
     jackpot, draw = await get_toto_data(fetch_toto)
     await update.message.reply_text(f"🏆 {jackpot}\n📅 {draw}")
 
+async def get_lucky(update, context):
+    numbers = get_lucky_number()
+    await update.message.reply_text(
+        f"🎟️ <b>Your TOTO Numbers</b>\n"
+        f"🔢 {' '.join(f'{n:02d}' for n in numbers[:6])}  ✨ Bonus: {numbers[6]:02d}",
+        parse_mode="HTML"
+    )
 # -------------------------
 # Scheduler job
 # -------------------------
@@ -179,6 +202,7 @@ async def send_update(app):
 # Post-init hook
 # -------------------------
 async def post_init(app: Application):
+    await set_bot_commands(app)
     scheduler = AsyncIOScheduler()
     trigger = CronTrigger(day_of_week="mon,thu", hour=11, minute=0, timezone=pytz.timezone("Asia/Singapore"))
 #for render
@@ -210,6 +234,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("unsubscribe", unsubscribe))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("quickpick", get_lucky))
     # for local
     app.run_polling()
 
