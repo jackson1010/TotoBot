@@ -198,7 +198,7 @@ async def post_init(app: Application):
     scheduler.start()
     for job in scheduler.get_jobs():
         logger.info(f"Next run: {job.next_run_time}")
-    logger.info("Scheduler started")
+    logger.info("Scheduler started~")
 
 # -------------------------
 # Main
