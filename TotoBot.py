@@ -1,8 +1,9 @@
-
+import asyncio
 from datetime import datetime
 import os
 import sqlite3
 import logging
+import pytz
 from pytz import timezone
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -178,16 +179,16 @@ async def send_update(app):
 # Post-init hook
 # -------------------------
 async def post_init(app: Application):
-    scheduler = AsyncIOScheduler(timezone=timezone("Asia/Singapore"))
-    trigger = CronTrigger(day_of_week="mon,thu", hour=11, minute=0)
+    scheduler = AsyncIOScheduler()
+    trigger = CronTrigger(day_of_week="mon,thu", hour=11, minute=0, timezone=pytz.timezone("Asia/Singapore"))
 #for render
-    scheduler.add_job(send_update, trigger, args=[app])
+#   scheduler.add_job(send_update, trigger, args=[app])
 # for local
-#    loop = asyncio.get_event_loop()
-#   scheduler.add_job(
-#        lambda: asyncio.run_coroutine_threadsafe(send_update(app), loop),
-#        trigger
-#    )
+    loop = asyncio.get_event_loop()
+    scheduler.add_job(
+        lambda: asyncio.run_coroutine_threadsafe(send_update(app), loop),
+        trigger
+    )
     scheduler.start()
     for job in scheduler.get_jobs():
         logger.info(f"Next run: {job.next_run_time}")
@@ -210,14 +211,14 @@ def main():
     app.add_handler(CommandHandler("unsubscribe", unsubscribe))
     app.add_handler(CommandHandler("status", status))
     # for local
-    # app.run_polling()
+    app.run_polling()
 
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=WEBHOOK_PATH,
-        webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}",
-    )
+    # app.run_webhook(
+    #     listen="0.0.0.0",
+    #     port=PORT,
+    #     url_path=WEBHOOK_PATH,
+    #     webhook_url=f"{WEBHOOK_URL}/{WEBHOOK_PATH}",
+    # )
 
 if __name__ == "__main__":
     main()
