@@ -1,14 +1,12 @@
-import asyncio
+
 from datetime import datetime
 import os
 import sqlite3
 import logging
-import pytz
 from pytz import timezone
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import Update
 from telegram.ext import *
 
 
@@ -166,7 +164,7 @@ async def status(update, context):
 # -------------------------
 # Scheduler job
 # -------------------------
-async def send_update(app: Application):
+async def send_update(app):
     jackpot, draw = await get_toto_data(fetch_toto)
     msg = f"🏆 <b>TOTO Update</b>\n💰 {jackpot}\n📅 {draw}"
 
