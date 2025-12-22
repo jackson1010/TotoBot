@@ -9,12 +9,9 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram import Update
-from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-)
+from telegram.ext import *
+import keys
+
 
 Memory ={
     "jackpot": None,
@@ -155,15 +152,15 @@ async def get_toto_data(fetch_func):
 # -------------------------
 # Handlers
 # -------------------------
-async def start(update: Update, _: ContextTypes.DEFAULT_TYPE):
+async def start(update, context):
     add_subscriber(update.effective_chat.id)
     await update.message.reply_text("✅ Subscribed to TOTO updates")
 
-async def unsubscribe(update: Update, _: ContextTypes.DEFAULT_TYPE):
+async def unsubscribe(update, context):
     remove_subscriber(update.effective_chat.id)
     await update.message.reply_text("❌ Unsubscribed")
 
-async def status(update: Update, _: ContextTypes.DEFAULT_TYPE):
+async def status(update, context):
     jackpot, draw = await get_toto_data(fetch_toto)
     await update.message.reply_text(f"🏆 {jackpot}\n📅 {draw}")
 
