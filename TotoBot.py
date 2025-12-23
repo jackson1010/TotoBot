@@ -98,6 +98,11 @@ def cache_result(jackpot, draw):
     Memory["jackpot"] = jackpot
     Memory["draw"] = draw
 
+async def delete_webhook(app):
+        await app.bot.delete_webhook()
+        logger.info("Webhook deleted, safe to start polling")
+
+
 async def set_bot_commands(app):
     commands = [
         BotCommand("start", "Subscribe to TOTO updates"),
@@ -246,6 +251,7 @@ def main():
     app.add_handler(CommandHandler("quickpick", get_lucky))
     app.add_handler(CommandHandler("subscribers", get_subscribes))
     # for local
+    asyncio.run(delete_webhook(app))
     app.run_polling()
 
     # app.run_webhook(
