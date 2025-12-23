@@ -185,7 +185,7 @@ async def get_lucky(update, context):
         parse_mode="HTML"
     )
 
-async def subscribe(update, context):
+async def get_subscribes(update, context):
     subscribers = list_subscribers()
     if not subscribers:
         await update.message.reply_text("No subscribers found")
@@ -244,7 +244,7 @@ def main():
     app.add_handler(CommandHandler("unsubscribe", unsubscribe))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("quickpick", get_lucky))
-    app.add_handler(CommandHandler("subscribers", subscribers))
+    app.add_handler(CommandHandler("subscribers", get_subscribes))
     # for local
     app.run_polling()
 
