@@ -5,7 +5,6 @@ import os
 import sqlite3
 import logging
 import pytz
-from pytz import timezone
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -168,7 +167,7 @@ def get_lucky_number():
 # -------------------------
 async def start(update, context):
     add_subscriber(update.effective_chat.id)
-    await update.message.reply_text("✅ Subscribed to TOTO updates")
+    await update.message.reply_text("✅ Subscribed to weekly TOTO updates")
 
 async def unsubscribe(update, context):
     remove_subscriber(update.effective_chat.id)
@@ -185,6 +184,16 @@ async def get_lucky(update, context):
         f"🔢 {' '.join(f'{n:02d}' for n in numbers[:6])}  ✨ Bonus: {numbers[6]:02d}",
         parse_mode="HTML"
     )
+
+async def subscribe(update, context):
+    subscribers = list_subscribers()
+    if not subscribers:
+        await update.message.reply_text("No subscribers found")
+        return
+
+    msg ="Subscribers:\n"
+    msg += "\n".join(f"{i+1}.{cid}" for i, cid in enumerate(subscribers))
+    await update.message.reply_text(msg)
 # -------------------------
 # Scheduler job
 # -------------------------
@@ -235,6 +244,7 @@ def main():
     app.add_handler(CommandHandler("unsubscribe", unsubscribe))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("quickpick", get_lucky))
+    app.add_handler(CommandHandler("subscribers", subscribers))
     # for local
     app.run_polling()
 
